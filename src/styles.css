@@ -147,6 +147,19 @@ button {
   color: var(--text-soft);
   border-radius: 18px;
   padding: 14px 18px;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.feedback-bar--success {
+  background: rgba(148, 210, 183, 0.14);
+  border-color: rgba(148, 210, 183, 0.45);
+  color: var(--ok);
+}
+
+.feedback-bar--error {
+  background: rgba(213, 138, 123, 0.14);
+  border-color: rgba(213, 138, 123, 0.5);
+  color: var(--danger);
 }
 
 .content-grid {
@@ -245,6 +258,11 @@ button {
   justify-self: start;
   padding: 6px 14px;
   font-size: 0.85em;
+}
+
+.location-card__delete:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }
 
 .location-card:hover,

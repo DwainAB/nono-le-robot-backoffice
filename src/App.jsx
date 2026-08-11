@@ -619,7 +619,19 @@ function App() {
   const [catalogLocationIds, setCatalogLocationIds] = useState([]);
   const [productForm, setProductForm] = useState(defaultProductForm);
   const [feedback, setFeedback] = useState("");
+  const [feedbackType, setFeedbackType] = useState("neutral");
   const [loading, setLoading] = useState(false);
+  const [deletingCatalogId, setDeletingCatalogId] = useState(null);
+
+  function notifySuccess(message) {
+    setFeedback(message);
+    setFeedbackType("success");
+  }
+
+  function notifyError(error) {
+    setFeedback(getErrorMessage(error));
+    setFeedbackType("error");
+  }
   const [autoSyncDone, setAutoSyncDone] = useState(false);
   const [isRobotLocationModalOpen, setIsRobotLocationModalOpen] = useState(false);
   const [isManualLocationModalOpen, setIsManualLocationModalOpen] = useState(false);
@@ -658,15 +670,15 @@ function App() {
         .map((result) => getErrorMessage(result.reason));
 
       if (!health) {
-        setFeedback(errors[0] || "Backend inaccessible.");
+        notifyError(errors[0] || "Backend inaccessible.");
       } else if (errors.length) {
-        setFeedback(`Backend connecté, mais incomplet : ${errors.join(" | ")}`);
+        notifyError(`Backend connecté, mais incomplet : ${errors.join(" | ")}`);
       } else {
-        setFeedback("Données chargées.");
+        notifySuccess("Données chargées.");
       }
     } catch (error) {
       setBackendOnline(false);
-      setFeedback(getErrorMessage(error));
+      notifyError(error);
     } finally {
       setLoading(false);
     }
@@ -703,9 +715,9 @@ function App() {
           body: JSON.stringify({ locations })
         });
         await loadAll();
-        setFeedback("Lieux robot synchronisés automatiquement à l'ouverture.");
+        notifySuccess("Lieux robot synchronisés automatiquement à l'ouverture.");
       } catch (error) {
-        setFeedback(`Synchronisation auto échouée : ${getErrorMessage(error)}`);
+        notifyError(`Synchronisation auto échouée : ${getErrorMessage(error)}`);
       } finally {
         setAutoSyncDone(true);
         setLoading(false);
@@ -732,9 +744,9 @@ function App() {
       setLocationForm(mapLocationToForm(response.location));
       setSelectedLocationId(String(response.location.id));
       await loadAll();
-      setFeedback("Lieu enregistré.");
+      notifySuccess("Lieu enregistré.");
     } catch (error) {
-      setFeedback(getErrorMessage(error));
+      notifyError(error);
     } finally {
       setLoading(false);
     }
@@ -743,7 +755,7 @@ function App() {
   async function handleRobotLocationModalSubmit(event) {
     event.preventDefault();
     if (!selectedLocationId) {
-      setFeedback("Aucun lieu robot sélectionné.");
+      notifyError("Aucun lieu robot sélectionné.");
       return;
     }
 
@@ -760,10 +772,10 @@ function App() {
       });
 
       await loadAll();
-      setFeedback("Lieu robot enrichi.");
+      notifySuccess("Lieu robot enrichi.");
       setIsRobotLocationModalOpen(false);
     } catch (error) {
-      setFeedback(getErrorMessage(error));
+      notifyError(error);
     } finally {
       setLoading(false);
     }
@@ -785,10 +797,10 @@ function App() {
       });
 
       await loadAll();
-      setFeedback("Lieu manuel enregistré.");
+      notifySuccess("Lieu manuel enregistré.");
       setIsManualLocationModalOpen(false);
     } catch (error) {
-      setFeedback(getErrorMessage(error));
+      notifyError(error);
     } finally {
       setLoading(false);
     }
@@ -814,9 +826,9 @@ function App() {
       }
 
       await loadAll();
-      setFeedback("Lieu supprimé.");
+      notifySuccess("Lieu supprimé.");
     } catch (error) {
-      setFeedback(getErrorMessage(error));
+      notifyError(error);
     } finally {
       setLoading(false);
     }
@@ -833,9 +845,9 @@ function App() {
         })
       });
       await loadAll();
-      setFeedback("Synchronisation robot effectuée.");
+      notifySuccess("Synchronisation robot effectuée.");
     } catch (error) {
-      setFeedback(getErrorMessage(error));
+      notifyError(error);
     } finally {
       setLoading(false);
     }
@@ -854,9 +866,9 @@ function App() {
         })
       });
       await loadAll();
-      setFeedback("Information magasin enregistrée.");
+      notifySuccess("Information magasin enregistrée.");
     } catch (error) {
-      setFeedback(getErrorMessage(error));
+      notifyError(error);
     } finally {
       setLoading(false);
     }
@@ -904,11 +916,44 @@ function App() {
       });
 
       await loadAll();
-      setFeedback("Catalogue enregistré.");
+      notifySuccess("Catalogue enregistré.");
     } catch (error) {
-      setFeedback(getErrorMessage(error));
+      notifyError(error);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleDeleteCatalog(catalog) {
+    const productCount = (catalog.products || []).length;
+    const confirmed = window.confirm(
+      `Supprimer le catalogue « ${catalog.name} » ? ${
+        productCount
+          ? `Les ${productCount} produit(s) qu'il contient et qui ne sont dans aucun autre catalogue seront aussi supprimés.`
+          : ""
+      }`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingCatalogId(catalog.id);
+    try {
+      await request(apiBase, "/api/admin/catalogs/delete", {
+        method: "POST",
+        body: JSON.stringify({ id: catalog.id })
+      });
+
+      if (String(catalogForm.id) === String(catalog.id)) {
+        setIsCatalogModalOpen(false);
+      }
+
+      await loadAll();
+      notifySuccess("Catalogue supprimé.");
+    } catch (error) {
+      notifyError(error);
+    } finally {
+      setDeletingCatalogId(null);
     }
   }
 
@@ -931,9 +976,9 @@ function App() {
     try {
       const result = await uploadImageFile(apiBase, file);
       setProductForm((current) => ({ ...current, imageUrl: result.imageUrl }));
-      setFeedback("Image envoyée.");
+      notifySuccess("Image envoyée.");
     } catch (error) {
-      setFeedback(getErrorMessage(error));
+      notifyError(error);
     } finally {
       setImageUploading(false);
     }
@@ -966,9 +1011,9 @@ function App() {
       });
 
       setCatalogs(response.catalogs || []);
-      setFeedback(product.isNew ? "Produit retiré des nouveautés." : "Produit marqué comme nouveau.");
+      notifySuccess(product.isNew ? "Produit retiré des nouveautés." : "Produit marqué comme nouveau.");
     } catch (error) {
-      setFeedback(getErrorMessage(error));
+      notifyError(error);
     } finally {
       setLoading(false);
     }
@@ -1007,9 +1052,9 @@ function App() {
       });
 
       setCatalogs(response.catalogs || []);
-      setFeedback("Produit retiré du catalogue.");
+      notifySuccess("Produit retiré du catalogue.");
     } catch (error) {
-      setFeedback(getErrorMessage(error));
+      notifyError(error);
     } finally {
       setLoading(false);
     }
@@ -1018,7 +1063,7 @@ function App() {
   async function handleProductSubmit(event) {
     event.preventDefault();
     if (!catalogForm.id) {
-      setFeedback("Enregistre d'abord le catalogue.");
+      notifyError("Enregistre d'abord le catalogue.");
       return;
     }
 
@@ -1039,7 +1084,7 @@ function App() {
         }));
 
       if (!cleanedVariants.length) {
-        setFeedback("Renseigne au moins un prix.");
+        notifyError("Renseigne au moins un prix.");
         setLoading(false);
         return;
       }
@@ -1072,10 +1117,10 @@ function App() {
       });
 
       setCatalogs(response.catalogs || []);
-      setFeedback("Produit enregistré.");
+      notifySuccess("Produit enregistré.");
       setIsProductModalOpen(false);
     } catch (error) {
-      setFeedback(getErrorMessage(error));
+      notifyError(error);
     } finally {
       setLoading(false);
     }
@@ -1099,9 +1144,9 @@ function App() {
         body: JSON.stringify({ enabled: nextEnabled })
       });
       setKillswitchEnabled(Boolean(state?.enabled));
-      setFeedback(nextEnabled ? "Killswitch activé." : "Killswitch désactivé.");
+      notifySuccess(nextEnabled ? "Killswitch activé." : "Killswitch désactivé.");
     } catch (error) {
-      setFeedback(getErrorMessage(error));
+      notifyError(error);
     } finally {
       setKillswitchLoading(false);
     }
@@ -1176,7 +1221,9 @@ function App() {
         </article>
       </div>
 
-      <div className="feedback-bar">{feedback || "Prêt."}</div>
+      <div className={`feedback-bar feedback-bar--${feedback ? feedbackType : "neutral"}`}>
+        {feedback || "Prêt."}
+      </div>
 
       <div className="content-grid">
         <section className="panel">
@@ -1322,18 +1369,35 @@ function App() {
 
           <div className="location-list">
             {catalogs.map((catalog) => (
-              <button key={catalog.id} className="location-card" onClick={() => openExistingCatalogModal(catalog)}>
-                <div className="location-card__top">
-                  <strong>{catalog.name}</strong>
-                  <span className="pill-inline">{(catalog.products || []).length} produit(s)</span>
-                </div>
-                <span>{catalog.description || "Aucune description"}</span>
-                <small>
-                  {(catalog.locations || []).length
-                    ? `Lieux : ${catalog.locations.map((location) => location.name).join(", ")}`
-                    : "Aucun lieu associé"}
-                </small>
-              </button>
+              <div key={catalog.id} className="location-card">
+                <button
+                  type="button"
+                  className="location-card__body"
+                  onClick={() => openExistingCatalogModal(catalog)}
+                >
+                  <div className="location-card__top">
+                    <strong>{catalog.name}</strong>
+                    <span className="pill-inline">{(catalog.products || []).length} produit(s)</span>
+                  </div>
+                  <span>{catalog.description || "Aucune description"}</span>
+                  <small>
+                    {(catalog.locations || []).length
+                      ? `Lieux : ${catalog.locations.map((location) => location.name).join(", ")}`
+                      : "Aucun lieu associé"}
+                  </small>
+                </button>
+                <button
+                  type="button"
+                  className="button button--ghost button--danger location-card__delete"
+                  disabled={deletingCatalogId === catalog.id}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleDeleteCatalog(catalog);
+                  }}
+                >
+                  {deletingCatalogId === catalog.id ? "Suppression…" : "Supprimer"}
+                </button>
+              </div>
             ))}
             {!catalogs.length ? (
               <div className="empty-state">
